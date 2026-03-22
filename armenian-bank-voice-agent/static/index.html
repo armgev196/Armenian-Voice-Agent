@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="hy">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Հայկական Բանկի AI Ձայնային օպերատոր</title>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.min.js"></script>
+<style>
+  :root {
+    --bg:      #0d0f14;
+    --surface: #161a22;
+    --border:  #252b38;
+    --accent:  #e8412a;
+    --amber:   #f5a623;
+    --text:    #e8eaf0;
+    --muted:   #6b7385;
+    --green:   #2ecc71;
+    --r:       12px;
+    --mono:    'Courier New', monospace;
+    --serif:   Georgia, 'Times New Roman', serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--serif);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+  }
+
+  header { text-align: center; margin-bottom: 2.5rem; }
+  .flag  { font-size: 2.8rem; margin-bottom: 0.5rem; }
+
+  h1 {
+    font-size: 1.5rem;
+    font-weight: normal;
+    letter-spacing: 0.04em;
+  }
+
+  .subtitle {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-top: 0.4rem;
+    font-family: var(--mono);
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    width: 100%;
+    max-width: 560px;
+    overflow: hidden;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.9rem 1.2rem;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.listening { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: blink 1s infinite; }
+  .dot.speaking  { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: blink 0.6s infinite; }
+
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  .visualizer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 1rem;
+    gap: 4px;
+    min-height: 120px;
+  }
+
+  .bar {
+    width: 4px;
+    background: var(--border);
+    border-radius: 4px;
+    height: 8px;
+    transition: height 0.08s, background 0.2s;
+  }
+  .bar.user  { background: var(--accent); }
+  .bar.agent { background: var(--amber); }
+
+  .transcript {
+    min-height: 140px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 1rem 1.2rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.92rem;
+    line-height: 1.65;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .transcript::-webkit-scrollbar { width: 4px; }
+  .transcript::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .msg { display: flex; flex-direction: column; gap: 0.15rem; }
+
+  .msg-label {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .msg.user  .msg-label { color: var(--amber); }
+  .msg.agent .msg-label { color: var(--accent); }
+  .msg.system .msg-text { color: var(--muted); font-style: italic; font-size: 0.82rem; }
+
+  .empty-state {
+    color: var(--muted);
+    text-align: center;
+    font-size: 0.85rem;
+    padding: 1.5rem 0;
+    font-style: italic;
+  }
+
+  .controls {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem 1.2rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    letter-spacing: 0.04em;
+  }
+
+  .btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover:not(:disabled) { background: #c73420; border-color: #c73420; color: #fff; }
+
+  .btn.danger { border-color: #c0392b; color: #c0392b; }
+  .btn.danger:hover:not(:disabled) { background: #c0392b; color: #fff; }
+
+  .config {
+    padding: 1rem 1.2rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .config label {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .config input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    padding: 0.5rem 0.75rem;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .config input:focus { border-color: var(--accent); }
+
+  .config-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+
+  footer {
+    margin-top: 2rem;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="flag">🇦🇲</div>
+  <h1>Հայկական Բանկի AI Ձայнайین Оpeраtоr</h1>
+  <div class="subtitle">Armenian Bank Voice Agent — dev interface</div>
+</header>
+
+<div class="panel">
+
+  <div class="status-bar">
+    <div class="dot" id="dot"></div>
+    <span id="status-text">Disconnected</span>
+    <span style="margin-left:auto" id="room-label"></span>
+  </div>
+
+  <div class="visualizer" id="visualizer"></div>
+
+  <div class="transcript" id="transcript">
+    <div class="empty-state" id="empty-msg">
+      Connect to start a conversation with the Armenian bank agent.
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary" id="btn-connect"    onclick="connect()">Connect</button>
+    <button class="btn danger"  id="btn-disconnect" onclick="disconnect()" disabled>Disconnect</button>
+    <button class="btn"         id="btn-mute"       onclick="toggleMute()" disabled>Mute</button>
+  </div>
+
+  <div class="config">
+    <div class="config-row">
+      <div>
+        <label>Token server</label>
+        <input id="token-server" value="http://localhost:8080" />
+      </div>
+      <div>
+        <label>Room</label>
+        <input id="room-name" value="bank-support" />
+      </div>
+    </div>
+    <div>
+      <label>Identity</label>
+      <input id="identity" value="test-user" />
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Whisper hy &nbsp;·&nbsp; Claude Sonnet &nbsp;·&nbsp; Google hy-AM &nbsp;·&nbsp; LiveKit self-hosted
+</footer>
+
+<script>
+const { Room, RoomEvent, Track, createLocalAudioTrack } = LivekitClient;
+
+const NUM_BARS = 24;
+
+let room = null;
+let localTrack = null;
+let muted = false;
+let agentAnalyser = null;
+let animFrame = null;
+
+const viz = document.getElementById('visualizer');
+const bars = Array.from({ length: NUM_BARS }, () => {
+  const b = document.createElement('div');
+  b.className = 'bar';
+  viz.appendChild(b);
+  return b;
+});
+
+function drawBars(data, cls) {
+  const step = Math.floor(data.length / NUM_BARS);
+  bars.forEach((b, i) => {
+    const val = data[i * step] || 0;
+    b.style.height = Math.max(4, Math.min(60, val * 0.5)) + 'px';
+    b.className = 'bar' + (val > 10 ? ' ' + cls : '');
+  });
+}
+
+function resetBars() {
+  bars.forEach(b => { b.style.height = '8px'; b.className = 'bar'; });
+}
+
+function setStatus(text, dotCls = '') {
+  document.getElementById('status-text').textContent = text;
+  document.getElementById('dot').className = 'dot ' + dotCls;
+}
+
+function addMessage(role, text) {
+  document.getElementById('empty-msg')?.remove();
+  const t = document.getElementById('transcript');
+  const labels = { user: 'You', agent: 'Agent', system: 'System' };
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.innerHTML = `<div class="msg-label">${labels[role] || role}</div><div class="msg-text">${text}</div>`;
+  t.appendChild(div);
+  t.scrollTop = t.scrollHeight;
+}
+
+function setButtons(connected) {
+  document.getElementById('btn-connect').disabled = connected;
+  document.getElementById('btn-disconnect').disabled = !connected;
+  document.getElementById('btn-mute').disabled = !connected;
+}
+
+async function connect() {
+  const tokenServer = document.getElementById('token-server').value.trim();
+  const roomName    = document.getElementById('room-name').value.trim();
+  const identity    = document.getElementById('identity').value.trim() || 'user-' + Date.now();
+
+  setStatus('Connecting…');
+  document.getElementById('btn-connect').disabled = true;
+
+  try {
+    const res = await fetch(`${tokenServer}/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`);
+    if (!res.ok) throw new Error(`Token server: HTTP ${res.status}`);
+    const { token, url } = await res.json();
+
+    room = new Room({ adaptiveStream: true, dynacast: true });
+
+    room.on(RoomEvent.Connected, () => {
+      setStatus(`Connected — ${roomName}`, 'connected');
+      document.getElementById('room-label').textContent = roomName;
+      setButtons(true);
+      addMessage('system', `room=${roomName}  identity=${identity}`);
+    });
+
+    room.on(RoomEvent.Disconnected, () => {
+      setStatus('Disconnected');
+      document.getElementById('room-label').textContent = '';
+      setButtons(false);
+      cancelAnimationFrame(animFrame);
+      resetBars();
+      addMessage('system', 'Disconnected.');
+    });
+
+    room.on(RoomEvent.ParticipantConnected, p => {
+      if (p.identity === 'agent' || p.identity.startsWith('voice-agent')) {
+        setStatus('Agent joined — listening', 'listening');
+        addMessage('system', 'Agent connected.');
+      }
+    });
+
+    room.on(RoomEvent.TrackSubscribed, (track) => {
+      if (track.kind !== Track.Kind.Audio) return;
+
+      const el = track.attach();
+      el.style.display = 'none';
+      document.body.appendChild(el);
+
+      setStatus('Agent speaking…', 'speaking');
+
+      const ctx = new AudioContext();
+      const src = ctx.createMediaStreamSource(new MediaStream([track.mediaStreamTrack]));
+      agentAnalyser = ctx.createAnalyser();
+      agentAnalyser.fftSize = 64;
+      src.connect(agentAnalyser);
+
+      const buf = new Uint8Array(agentAnalyser.frequencyBinCount);
+      const draw = () => {
+        agentAnalyser.getByteFrequencyData(buf);
+        drawBars(buf, 'agent');
+        animFrame = requestAnimationFrame(draw);
+      };
+      draw();
+    });
+
+    room.on(RoomEvent.TrackUnsubscribed, () => {
+      setStatus('Listening…', 'listening');
+      cancelAnimationFrame(animFrame);
+      agentAnalyser = null;
+      resetBars();
+    });
+
+    room.on(RoomEvent.DataReceived, (raw) => {
+      try {
+        const msg = JSON.parse(new TextDecoder().decode(raw));
+        if (msg.type === 'transcript' && (msg.role === 'user' || msg.role === 'agent')) {
+          addMessage(msg.role, msg.text);
+        }
+      } catch (_) {}
+    });
+
+    await room.connect(url, token);
+
+    localTrack = await createLocalAudioTrack({ echoCancellation: true, noiseSuppression: true });
+    await room.localParticipant.publishTrack(localTrack);
+
+    const micCtx      = new AudioContext();
+    const micAnalyser = micCtx.createAnalyser();
+    micAnalyser.fftSize = 64;
+    micCtx.createMediaStreamSource(new MediaStream([localTrack.mediaStreamTrack])).connect(micAnalyser);
+
+    const micBuf = new Uint8Array(micAnalyser.frequencyBinCount);
+    const drawMic = () => {
+      micAnalyser.getByteFrequencyData(micBuf);
+      if (!agentAnalyser) drawBars(micBuf, 'user');
+      animFrame = requestAnimationFrame(drawMic);
+    };
+    drawMic();
+
+  } catch (err) {
+    setStatus('Failed: ' + err.message);
+    document.getElementById('btn-connect').disabled = false;
+    addMessage('system', err.message);
+    console.error(err);
+  }
+}
+
+async function disconnect() {
+  if (room) {
+    await room.disconnect();
+    room = null;
+    localTrack = null;
+  }
+}
+
+async function toggleMute() {
+  if (!localTrack) return;
+  muted = !muted;
+  muted ? await localTrack.mute() : await localTrack.unmute();
+  document.getElementById('btn-mute').textContent = muted ? 'Unmute' : 'Mute';
+  setStatus(muted ? 'Muted' : 'Listening…', muted ? 'connected' : 'listening');
+}
+</script>
+</body>
+</html>
